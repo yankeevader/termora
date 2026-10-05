@@ -3,7 +3,6 @@ package app.termora.plugin
 import app.termora.Application
 import app.termora.ApplicationScope
 import app.termora.FramePlugin
-import app.termora.account.AccountPlugin
 import app.termora.plugin.internal.badge.BadgePlugin
 import app.termora.plugin.internal.extension.DynamicExtensionPlugin
 import app.termora.plugin.internal.local.LocalInternalPlugin
@@ -12,7 +11,6 @@ import app.termora.plugin.internal.rdp.RDPInternalPlugin
 import app.termora.plugin.internal.sftppty.SFTPPtyInternalPlugin
 import app.termora.plugin.internal.ssh.SSHInternalPlugin
 import app.termora.plugin.internal.telnet.TelnetInternalPlugin
-import app.termora.plugin.internal.updater.UpdaterPlugin
 import app.termora.plugin.internal.wsl.WSLInternalPlugin
 import app.termora.swingCoroutineScope
 import app.termora.terminal.panel.vw.FloatingToolbarPlugin
@@ -106,12 +104,8 @@ internal class PluginManager private constructor() {
         plugins.add(PluginDescriptor(DynamicExtensionPlugin(), origin = PluginOrigin.Internal, version = version))
         // plugin
         plugins.add(PluginDescriptor(PluginInternalPlugin(), origin = PluginOrigin.Internal, version = version))
-        // account plugin
-        plugins.add(PluginDescriptor(AccountPlugin(), origin = PluginOrigin.Internal, version = version))
         // badge plugin
         plugins.add(PluginDescriptor(BadgePlugin(), origin = PluginOrigin.Internal, version = version))
-        // update plugin
-        plugins.add(PluginDescriptor(UpdaterPlugin(), origin = PluginOrigin.Internal, version = version))
         // frame plugin
         plugins.add(PluginDescriptor(FramePlugin(), origin = PluginOrigin.Internal, version = version))
 
@@ -203,6 +197,15 @@ internal class PluginManager private constructor() {
                     iconResource?.openStream(),
                     darkIconResource?.openStream()
                 )
+
+                // OTM local-only build: never load the bundled cloud-sync plugin.
+                // SSH/SFTP and explicitly configured remote hosts remain available.
+                if (pluginDescriptor.id == "sync") {
+                    if (log.isInfoEnabled) {
+                        log.info("Skipping cloud sync plugin in OTM local-only build")
+                    }
+                    continue
+                }
 
                 if (pluginIds.contains(pluginDescriptor.id)) continue
 
