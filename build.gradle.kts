@@ -400,8 +400,8 @@ tasks.register<Exec>("jpackage") {
     arguments.addAll(listOf("--temp", "$buildDir/jpackage"))
     arguments.addAll(listOf("--dest", "$buildDir/distributions"))
     arguments.addAll(listOf("--java-options", options.joinToString(StringUtils.SPACE)))
-    arguments.addAll(listOf("--vendor", "TermoraDev"))
-    arguments.addAll(listOf("--copyright", "TermoraDev"))
+    arguments.addAll(listOf("--vendor", "Off The Map"))
+    arguments.addAll(listOf("--copyright", "Off The Map"))
     arguments.addAll(listOf("--app-content", "$buildDir/plugins"))
 
     if (os.isMacOsX) {
