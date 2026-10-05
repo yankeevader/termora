@@ -46,8 +46,7 @@ class ApplicationRunner {
         // 加载设置
         loadSettings()
 
-        // 统计
-        enableAnalytics()
+        // OTM local-only build: no analytics / telemetry phone-home.
 
         // 设置 LAF
         setupLaf()
