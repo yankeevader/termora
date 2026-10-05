@@ -1,7 +1,7 @@
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
-rootProject.name = "termora"
+rootProject.name = "tunnelkeeper"
 
 include("plugins:s3")
 include("plugins:oss")
