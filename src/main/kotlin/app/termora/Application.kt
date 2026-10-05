@@ -104,7 +104,9 @@ object Application {
         val dir = if (StringUtils.isNotBlank(baseDataDir)) {
             File(baseDataDir)
         } else {
-            File(SystemUtils.getUserHome(), ".${getName()}".lowercase())
+            // Tunnelkeeper currently reuses the existing local Termora data store
+            // so hosts, keys, snippets, and preferences survive the rebrand.
+            File(SystemUtils.getUserHome(), ".termora")
         }
 
 
@@ -194,7 +196,7 @@ object Application {
     }
 
     fun getName(): String {
-        return "Termora"
+        return "Tunnelkeeper"
     }
 
     fun browse(uri: URI, async: Boolean = true) {
