@@ -2,7 +2,10 @@ package app.termora
 
 import app.termora.actions.AnAction
 import app.termora.actions.AnActionEvent
+import app.termora.actions.DataProviders
 import app.termora.plugin.internal.extension.DynamicExtensionHandler
+import app.termora.snippet.SnippetAction
+import app.termora.snippet.SnippetTree
 import app.termora.tree.NewHostTree
 import com.formdev.flatlaf.extras.components.FlatTabbedPane
 import com.formdev.flatlaf.extras.components.FlatToolBar
@@ -136,6 +139,10 @@ class TermoraFencePanel(
 
     private inner class LeftTreePanel : JPanel(BorderLayout()), Disposable {
         val hostTree = NewHostTree()
+        private val snippetTree = SnippetTree()
+        private val sidebarTabs = FlatTabbedPane().apply {
+            tabType = FlatTabbedPane.TabType.underlined
+        }
         private val box = JToolBar().apply { isFloatable = false }
 
         init {
@@ -144,7 +151,6 @@ class TermoraFencePanel(
         }
 
         private fun initView() {
-            val scrollPane = JScrollPane(hostTree)
             hostTree.name = "FenceHostTree"
             hostTree.restoreExpansions()
             box.preferredSize = Dimension(-1, tabbed.tabHeight)
@@ -166,19 +172,55 @@ class TermoraFencePanel(
                 box.addMouseMotionListener(moveMouseAdapter)
             }
 
-            scrollPane.verticalScrollBar.unitIncrement = 16
-            scrollPane.horizontalScrollBar.unitIncrement = 16
-            scrollPane.border = BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 0, 0, DynamicColor.BorderColor),
-                BorderFactory.createEmptyBorder(4, 4, 0, 4)
-            )
+            val hostScrollPane = createTreeScrollPane(hostTree)
+            val snippetScrollPane = createTreeScrollPane(snippetTree)
+
+            sidebarTabs.addTab(I18n.getString("termora.welcome.my-hosts"), hostScrollPane)
+            sidebarTabs.addTab(I18n.getString("termora.snippet.title"), snippetScrollPane)
 
             add(box, BorderLayout.NORTH)
-            add(scrollPane, BorderLayout.CENTER)
+            add(sidebarTabs, BorderLayout.CENTER)
+        }
+
+        private fun createTreeScrollPane(tree: JTree): JScrollPane {
+            return JScrollPane(tree).apply {
+                verticalScrollBar.unitIncrement = 16
+                horizontalScrollBar.unitIncrement = 16
+                border = BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(1, 0, 0, 0, DynamicColor.BorderColor),
+                    BorderFactory.createEmptyBorder(4, 4, 0, 4)
+                )
+            }
         }
 
         private fun initEvents() {
             Disposer.register(this, hostTree)
+
+            snippetTree.addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    if (SwingUtilities.isLeftMouseButton(e) && e.clickCount % 2 == 0) {
+                        runSelectedSnippet()
+                    }
+                }
+            })
+
+            snippetTree.actionMap.put("runSnippet", object : AbstractAction() {
+                override fun actionPerformed(e: ActionEvent?) {
+                    runSelectedSnippet()
+                }
+            })
+            snippetTree.getInputMap(JComponent.WHEN_FOCUSED)
+                .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "runSnippet")
+        }
+
+        private fun runSelectedSnippet() {
+            val node = snippetTree.getLastSelectedPathNode() ?: return
+            if (node.isFolder) return
+
+            val activeTab = terminalTabbed.getSelectedTerminalTab() ?: return
+            val writer = activeTab.getData(DataProviders.TerminalWriter) ?: return
+
+            SnippetAction.getInstance().runSnippet(node.data, writer)
         }
     }
 
