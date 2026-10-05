@@ -358,6 +358,8 @@ tasks.register<Exec>("jlink") {
 }
 
 tasks.register<Exec>("jpackage") {
+    // Make the packaging task self-contained for local Tunnelkeeper builds.
+    dependsOn("jar", "copy-dependencies", "jlink", ":plugins:migration:build")
 
     val buildDir = layout.buildDirectory.get()
     val options = mutableListOf(
@@ -464,6 +466,58 @@ tasks.register("dist") {
     }
 }
 
+
+/**
+ * Build a no-installer, self-contained Windows ZIP.
+ *
+ * The archive includes its own JRE and a local ./data directory. Tunnelkeeper
+ * will read/write hosts, keys, snippets, settings and logs only inside that
+ * folder when launched from this ZIP layout.
+ */
+tasks.register("portableDist") {
+    dependsOn("jpackage")
+
+    doLast {
+        if (os.isWindows.not()) {
+            throw GradleException("portableDist is currently supported on Windows only")
+        }
+
+        val distributionDir = layout.buildDirectory.dir("distributions").get()
+        val projectName = project.name.uppercaseFirstChar()
+        val appDir = distributionDir.dir(projectName).asFile
+        val cfg = FileUtils.getFile(appDir, "app", "${projectName}.cfg")
+
+        if (appDir.exists().not() || cfg.exists().not()) {
+            throw GradleException("jpackage output not found: ${appDir.absolutePath}")
+        }
+
+        // Mark runtime as the portable ZIP layout.
+        val configText = cfg.readText()
+        if (configText.contains("-Djpackage.app-layout=zip").not()) {
+            cfg.writeText(
+                StringBuilder(configText)
+                    .appendLine("java-options=-Djpackage.app-layout=zip")
+                    .toString()
+            )
+        }
+
+        // Force a local writable data root into the portable package.
+        FileUtils.forceMkdir(FileUtils.getFile(appDir, "data"))
+
+        val finalFilename =
+            "${project.name}-${project.version}-windows-${arch.name}-portable.zip"
+        val output = distributionDir.file(finalFilename).asFile
+        FileUtils.deleteQuietly(output)
+
+        exec {
+            commandLine("tar", "-vacf", output.absolutePath, projectName)
+            workingDir = distributionDir.asFile
+        }
+
+        println("Portable Tunnelkeeper package: ${output.absolutePath}")
+    }
+}
+
 tasks.register("check-license") {
     doLast {
         val iterator = File(projectDir, "THIRDPARTY").readLines().iterator()
@@ -523,6 +577,7 @@ fun packOnWindows(distributionDir: Directory, finalFilenameWithoutExtension: Str
 
     // zip
     cfg.writeText(StringBuilder(configText).appendLine("java-options=-Djpackage.app-layout=zip").toString())
+    FileUtils.forceMkdir(FileUtils.getFile(dir, projectName, "data"))
     exec {
         commandLine(
             "tar", "-vacf",
