@@ -45,11 +45,8 @@ internal class MarketplaceManager private constructor() {
     private val exceptionReference = AtomicReference<Exception>(null)
 
     fun getPlugins(): List<MarketplacePlugin> {
-        if (plugins.isNotEmpty()) return plugins
-
-        refreshPlugins()
-
-        return plugins
+        // OTM local-only build: marketplace access is disabled.
+        return emptyList()
     }
 
     fun clear() {
