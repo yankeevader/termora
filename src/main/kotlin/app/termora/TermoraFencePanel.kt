@@ -3,6 +3,7 @@ package app.termora
 import app.termora.actions.AnAction
 import app.termora.actions.AnActionEvent
 import app.termora.actions.DataProviders
+import app.termora.actions.NewHostAction
 import app.termora.plugin.internal.extension.DynamicExtensionHandler
 import app.termora.snippet.SnippetAction
 import app.termora.snippet.SnippetTree
@@ -17,6 +18,7 @@ import java.awt.event.*
 import javax.swing.*
 import javax.swing.tree.TreePath
 import kotlin.math.max
+import org.jdesktop.swingx.action.ActionManager
 
 
 class TermoraFencePanel(
@@ -196,9 +198,52 @@ class TermoraFencePanel(
         private fun initEvents() {
             Disposer.register(this, hostTree)
 
+            hostTree.addMouseListener(object : MouseAdapter() {
+                override fun mouseClicked(e: MouseEvent) {
+                    if (!SwingUtilities.isLeftMouseButton(e) || e.clickCount != 1) return
+
+                    val path = hostTree.getPathForLocation(e.x, e.y) ?: return
+                    val node = path.lastPathComponent as? app.termora.tree.HostTreeNode ?: return
+
+                    // Clicking the top-level "My hosts" folder opens the existing
+                    // Create a new host dialog, matching the toolbar New Host action.
+                    if (node.id == "0") {
+                        hostTree.selectionPath = path
+                        ActionManager.getInstance()
+                            .getAction(NewHostAction.NEW_HOST)
+                            ?.actionPerformed(
+                                ActionEvent(
+                                    hostTree,
+                                    ActionEvent.ACTION_PERFORMED,
+                                    NewHostAction.NEW_HOST
+                                )
+                            )
+                    }
+                }
+            })
+
             snippetTree.addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
-                    if (SwingUtilities.isLeftMouseButton(e) && e.clickCount % 2 == 0) {
+                    if (!SwingUtilities.isLeftMouseButton(e)) return
+
+                    val path = snippetTree.getPathForLocation(e.x, e.y) ?: return
+                    val node = path.lastPathComponent as? app.termora.snippet.SnippetTreeNode ?: return
+
+                    // Clicking the root Snippets folder opens Termora's normal
+                    // snippet editor/manager (same dialog as the <> toolbar action).
+                    if (e.clickCount == 1 && node == snippetTree.simpleTreeModel.root) {
+                        snippetTree.selectionPath = path
+                        SnippetAction.getInstance().actionPerformed(
+                            ActionEvent(
+                                snippetTree,
+                                ActionEvent.ACTION_PERFORMED,
+                                SnippetAction.SNIPPET
+                            )
+                        )
+                        return
+                    }
+
+                    if (e.clickCount % 2 == 0 && !node.isFolder) {
                         runSelectedSnippet()
                     }
                 }
