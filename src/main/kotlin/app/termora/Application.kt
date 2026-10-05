@@ -87,16 +87,14 @@ object Application {
             baseDataDir = System.getenv("${getName()}_BASE_DATA_DIR".uppercase())
         }
 
-        // Windows 并且是绿色版，那么判断所在目录是否有 data 目录
+        // Tunnelkeeper portable ZIP builds always keep all application data
+        // beside the executable in ./data. No profile/AppData dependency.
         if (SystemInfo.isWindows && getLayout() == AppLayout.Zip && StringUtils.isBlank(baseDataDir)) {
             val appPath = getAppPath()
             if (StringUtils.isNotBlank(appPath)) {
-                val file = File(appPath).parentFile
-                if (file.exists()) {
-                    val dataFile = File(file, "data")
-                    if (dataFile.exists()) {
-                        baseDataDir = dataFile.absolutePath
-                    }
+                val appDir = File(appPath).parentFile
+                if (appDir.exists()) {
+                    baseDataDir = File(appDir, "data").absolutePath
                 }
             }
         }
