@@ -12,7 +12,7 @@ enum class TermoraLayout {
 
     companion object {
         val Layout by lazy {
-            runCatching { TermoraLayout.valueOf(DatabaseManager.getInstance().appearance.layout) }.getOrNull() ?: Screen
+            runCatching { TermoraLayout.valueOf(DatabaseManager.getInstance().appearance.layout) }.getOrNull() ?: Fence
         }
     }
 }
