@@ -180,6 +180,7 @@ class TermoraFencePanel(
 
             sidebarTabs.addTab(I18n.getString("termora.welcome.my-hosts"), hostScrollPane)
             sidebarTabs.addTab(I18n.getString("termora.snippet.title"), snippetScrollPane)
+            snippetTree.expandRow(0)
 
             add(box, BorderLayout.NORTH)
             add(sidebarTabs, BorderLayout.CENTER)
@@ -207,6 +208,12 @@ class TermoraFencePanel(
 
         private fun initEvents() {
             Disposer.register(this, hostTree)
+
+            // The Snippets dialog uses its own tree model, so reload the
+            // sidebar when returning to its tab.
+            sidebarTabs.addChangeListener {
+                if (sidebarTabs.selectedIndex == 1) refreshSnippets()
+            }
 
             hostTree.addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
@@ -252,6 +259,9 @@ class TermoraFencePanel(
                                 SnippetAction.SNIPPET
                             )
                         )
+                        // Refresh after the modal editor closes so newly
+                        // created snippets appear immediately in the dock.
+                        refreshSnippets()
                         return
                     }
 
@@ -268,6 +278,11 @@ class TermoraFencePanel(
             })
             snippetTree.getInputMap(JComponent.WHEN_FOCUSED)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "runSnippet")
+        }
+
+        private fun refreshSnippets() {
+            snippetTree.simpleTreeModel.reload()
+            snippetTree.expandRow(0)
         }
 
         private fun runSelectedSnippet() {
