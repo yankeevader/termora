@@ -491,14 +491,18 @@ tasks.register("portableDist") {
             throw GradleException("jpackage output not found: ${appDir.absolutePath}")
         }
 
-        // Mark runtime as the portable ZIP layout.
+        // Add the flag to the JavaOptions section, not whichever section
+        // happens to be last in the generated jpackage launcher config.
         val configText = cfg.readText()
-        if (configText.contains("-Djpackage.app-layout=zip").not()) {
-            cfg.writeText(
-                StringBuilder(configText)
-                    .appendLine("java-options=-Djpackage.app-layout=zip")
-                    .toString()
-            )
+        val option = "java-options=-Djpackage.app-layout=zip"
+        val javaOptionsHeader = "[JavaOptions]"
+        if (configText.contains(option).not()) {
+            val newConfig = if (configText.contains(javaOptionsHeader)) {
+                configText.replaceFirst(javaOptionsHeader, "$javaOptionsHeader\n$option")
+            } else {
+                configText.trimEnd() + "\n$javaOptionsHeader\n$option\n"
+            }
+            cfg.writeText(newConfig)
         }
 
         // Force a local writable data root into the portable package.
