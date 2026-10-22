@@ -79,24 +79,26 @@ object Application {
             return baseDataDir
         }
 
-        // 从启动参数取
-        var baseDataDir = System.getProperty("${getName()}.base-data-dir".lowercase())
-
-        // 取不到从环境取
-        if (StringUtils.isBlank(baseDataDir)) {
-            baseDataDir = System.getenv("${getName()}_BASE_DATA_DIR".uppercase())
+        // A portable Windows package must not silently fall back to the
+        // user's normal profile (which could contain another app's SSH keys).
+        // Its only writable application data root is beside the launcher.
+        if (SystemInfo.isWindows && getLayout() == AppLayout.Zip) {
+            val launcherPath = getAppPath()
+            check(launcherPath.isNotBlank()) {
+                "Tunnelkeeper portable mode cannot determine its launcher path"
+            }
+            val executableDirectory = File(launcherPath).absoluteFile.parentFile
+                ?: error("Tunnelkeeper portable mode cannot determine its data directory")
+            val portableDir = File(executableDirectory, "data")
+            FileUtils.forceMkdir(portableDir)
+            Application.baseDataDir = portableDir
+            return portableDir
         }
 
-        // Tunnelkeeper portable ZIP builds always keep all application data
-        // beside the executable in ./data. No profile/AppData dependency.
-        if (SystemInfo.isWindows && getLayout() == AppLayout.Zip && StringUtils.isBlank(baseDataDir)) {
-            val appPath = getAppPath()
-            if (StringUtils.isNotBlank(appPath)) {
-                val appDir = File(appPath).parentFile
-                if (appDir.exists()) {
-                    baseDataDir = File(appDir, "data").absolutePath
-                }
-            }
+        // Keep existing non-portable overrides for compatibility.
+        var baseDataDir = System.getProperty("${getName()}.base-data-dir".lowercase())
+        if (StringUtils.isBlank(baseDataDir)) {
+            baseDataDir = System.getenv("${getName()}_BASE_DATA_DIR".uppercase())
         }
 
         val dir = if (StringUtils.isNotBlank(baseDataDir)) {
