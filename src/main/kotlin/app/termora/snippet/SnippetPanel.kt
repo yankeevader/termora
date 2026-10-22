@@ -49,6 +49,17 @@ class SnippetPanel : JPanel(BorderLayout()), Disposable {
         scrollPane.border = BorderFactory.createEmptyBorder()
 
         leftPanel.add(scrollPane, BorderLayout.CENTER)
+
+        // Provide an obvious way to create snippets without a context menu.
+        val newSnippetButton = JButton("+ New Snippet").apply {
+            toolTipText = "Create a snippet in the selected folder"
+            addActionListener { snippetTree.createSnippet() }
+        }
+        leftPanel.add(JPanel(BorderLayout()).apply {
+            add(newSnippetButton, BorderLayout.CENTER)
+            border = BorderFactory.createEmptyBorder(0, 0, 6, 0)
+        }, BorderLayout.NORTH)
+
         leftPanel.border = BorderFactory.createCompoundBorder(
             BorderFactory.createMatteBorder(0, 0, 0, 1, DynamicColor.BorderColor),
             BorderFactory.createEmptyBorder(4, 4, 4, 4)
