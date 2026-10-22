@@ -78,8 +78,29 @@ jobs:
           if (-not ($entries | Where-Object { $_ -match '^Tunnelkeeper/runtime/' })) {
             throw "Portable ZIP is missing its bundled Java runtime"
           }
-          if (-not ($entries | Where-Object { $_ -match '^Tunnelkeeper/data/?$' })) {
+          if (-not ($entries | Where-Object { $_ -match '^Tunnelkeeper/data/?
+          "$hash  $($package.Name)" | Set-Content -LiteralPath "$($package.FullName).sha256" -Encoding ascii
+          Write-Host "Verified portable build: $($package.Name)"
+
+      - name: Upload portable ZIP and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tunnelkeeper-Windows-x64-portable
+          path: |
+            build/distributions/*-windows-*-portable.zip
+            build/distributions/*-windows-*-portable.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
+ })) {
             throw "Portable ZIP is missing its writable data folder"
+          }
+          $cfgPath = 'Tunnelkeeper/app/Tunnelkeeper.cfg'
+          if (-not ($entries | Where-Object { $_ -eq $cfgPath })) {
+            throw "Portable ZIP is missing its launcher config"
+          }
+          $cfgContents = (& tar -xOf $package.FullName $cfgPath) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or $cfgContents -notmatch 'java-options=-Djpackage\.app-layout=zip') {
+            throw "Portable ZIP is missing the ZIP-layout Java option"
           }
           $hash = (Get-FileHash -LiteralPath $package.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $($package.Name)" | Set-Content -LiteralPath "$($package.FullName).sha256" -Encoding ascii
