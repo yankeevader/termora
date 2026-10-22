@@ -154,6 +154,7 @@ class TermoraFencePanel(
 
         private fun initView() {
             hostTree.name = "FenceHostTree"
+            hostTree.showsRootHandles = true
             hostTree.restoreExpansions()
             box.preferredSize = Dimension(-1, tabbed.tabHeight)
 
@@ -182,6 +183,15 @@ class TermoraFencePanel(
 
             add(box, BorderLayout.NORTH)
             add(sidebarTabs, BorderLayout.CENTER)
+
+            // In the default screen layout the saved host folder starts expanded.
+            // Fence mode must expose its children too, even on the first switch
+            // from Screen mode or when an older saved state left it collapsed.
+            val myHosts = hostTree.simpleTreeModel.root.getAllChildren()
+                .firstOrNull { it.id == "0" }
+            if (myHosts != null) {
+                hostTree.expandPath(TreePath(hostTree.simpleTreeModel.getPathToRoot(myHosts)))
+            }
         }
 
         private fun createTreeScrollPane(tree: JTree): JScrollPane {
@@ -200,7 +210,9 @@ class TermoraFencePanel(
 
             hostTree.addMouseListener(object : MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
-                    if (!SwingUtilities.isLeftMouseButton(e) || e.clickCount != 1) return
+                    // Single-click must select the folder normally. The
+                    // separate arrow controls expanding/collapsing its hosts.
+                    if (!SwingUtilities.isLeftMouseButton(e) || e.clickCount != 2) return
 
                     val path = hostTree.getPathForLocation(e.x, e.y) ?: return
                     val node = path.lastPathComponent as? app.termora.tree.HostTreeNode ?: return
