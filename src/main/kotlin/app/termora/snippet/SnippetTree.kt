@@ -35,6 +35,41 @@ class SnippetTree : SimpleTree() {
 
     }
 
+    /**
+     * Create an editable snippet in the selected folder. The root is used
+     * when nothing is selected; selecting a snippet uses its parent folder.
+     */
+    fun createSnippet() {
+        createEntry(SnippetType.Snippet)
+    }
+
+    fun createFolder() {
+        createEntry(SnippetType.Folder)
+    }
+
+    private fun createEntry(type: SnippetType) {
+        val selected = getLastSelectedPathNode() ?: simpleTreeModel.root
+        val parent = if (selected.isFolder) selected else selected.parent as? SnippetTreeNode
+            ?: simpleTreeModel.root
+
+        val newEntry = Snippet(
+            name = if (type == SnippetType.Folder) {
+                I18n.getString("termora.welcome.contextmenu.new.folder.name")
+            } else {
+                I18n.getString("termora.snippet")
+            },
+            type = type,
+            parentId = parent.data.id
+        )
+        val newNode = SnippetTreeNode(newEntry)
+        val insertAt = if (type == SnippetType.Folder) parent.folderCount else parent.childCount
+        simpleTreeModel.insertNodeInto(newNode, parent, insertAt)
+
+        expandPath(TreePath(simpleTreeModel.getPathToRoot(parent)))
+        selectionPath = TreePath(simpleTreeModel.getPathToRoot(newNode))
+        startEditingAtPath(selectionPath)
+    }
+
     override fun showContextmenu(evt: MouseEvent) {
         val lastNode = getLastSelectedPathNode() ?: return
         val popupMenu = FlatPopupMenu()
@@ -49,24 +84,8 @@ class SnippetTree : SimpleTree() {
         val colspanAll = popupMenu.add(I18n.getString("termora.welcome.contextmenu.collapse-all"))
         popupMenu.addSeparator()
 
-        newFolder.addActionListener {
-            val snippet = Snippet(
-                name = I18n.getString("termora.welcome.contextmenu.new.folder.name"),
-                type = SnippetType.Folder,
-                parentId = lastNode.data.id
-            )
-            snippetManager.addSnippet(snippet)
-            newFolder(SnippetTreeNode(snippet))
-        }
-        newSnippet.addActionListener {
-            val snippet = Snippet(
-                name = I18n.getString("termora.snippet"),
-                type = SnippetType.Snippet,
-                parentId = lastNode.data.id
-            )
-            snippetManager.addSnippet(snippet)
-            newFile(SnippetTreeNode(snippet))
-        }
+        newFolder.addActionListener { createFolder() }
+        newSnippet.addActionListener { createSnippet() }
 
         rename.addActionListener { startEditingAtPath(TreePath(simpleTreeModel.getPathToRoot(lastNode))) }
         refresh.addActionListener { simpleTreeModel.reload(lastNode) }
