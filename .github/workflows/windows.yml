@@ -1,116 +1,96 @@
-name: Windows
+name: Tunnelkeeper Windows Portable
 
-on: [ push, pull_request ]
+on:
+  push:
+    branches: [otm-ui]
+  pull_request:
+    branches: [otm-ui]
+  workflow_dispatch:
 
-env:
-  JBR_MAJOR: 21.0.8
-  JBR_PATCH: b1138.52
+permissions:
+  contents: read
 
 jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ windows-11-arm, windows-2022 ]
+  portable-windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
+      - name: Check out source
+        uses: actions/checkout@v4
 
-      - name: Setup MSbuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Set architecture
-        id: set-arch
-        run: |
-          if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
-            echo "ARCH=aarch64" >> $env:GITHUB_ENV
-          } else {
-            echo "ARCH=x64" >> $env:GITHUB_ENV
-          }
-
-      - name: Find MakeAppx
+      # The Gradle dependency repackaging task uses Info-ZIP's zip/unzip CLI.
+      # Never fetch unsigned executables over HTTP into System32.
+      - name: Install archive tools
         shell: pwsh
         run: |
-          $installedRootsKey = "HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots"
-          $kitsRoot = (Get-ItemProperty $installedRootsKey).KitsRoot10
-          $versions = Get-ChildItem -Path $installedRootsKey | Select-Object -ExpandProperty PSChildName
-          $maxVersion = $versions | ForEach-Object { [version]$_ } | Sort-Object -Descending | Select-Object -First 1
-          $arch = if ($env:ARCH -eq "aarch64") { "arm64" } else { "x64" }
-          $makeAppXPath = Join-Path -Path $kitsRoot -ChildPath "bin\$maxVersion\$arch\makeappx.exe"
-          Write-Output "MakeAppx.exe path: $makeAppXPath"
-          
-          if (Test-Path $makeAppXPath) {
-            "MAKEAPPX_PATH=$makeAppXPath" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-          } else {
-            Write-Output "MakeAppx.exe not found!"
-            exit 1
-          }
+          choco install zip unzip --yes --no-progress
+          if ($LASTEXITCODE -notin @(0, 3010)) { exit $LASTEXITCODE }
+          Get-Command zip.exe -ErrorAction Stop | Select-Object -ExpandProperty Source
+          Get-Command unzip.exe -ErrorAction Stop | Select-Object -ExpandProperty Source
 
-      - name: Install zip
+      - name: Install JetBrains Runtime 21
+        shell: pwsh
+        env:
+          JBR_VERSION: "21.0.8"
+          JBR_BUILD: "b1138.52"
         run: |
-          $system32 = [System.Environment]::GetEnvironmentVariable("WINDIR") + "\System32"
-          Invoke-WebRequest -Uri "http://stahlworks.com/dev/zip.exe" -OutFile "$system32\zip.exe"
-          Invoke-WebRequest -Uri "http://stahlworks.com/dev/unzip.exe" -OutFile "$system32\unzip.exe"
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'jbrsdk.zip'
+          $destination = Join-Path $env:RUNNER_TEMP 'jbrsdk'
+          $url = "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-$($env:JBR_VERSION)-windows-x64-$($env:JBR_BUILD).zip"
+          Invoke-WebRequest -Uri $url -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $destination
+          $jdk = Get-ChildItem -LiteralPath $destination -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName 'bin\java.exe') } |
+            Select-Object -First 1
+          if ($null -eq $jdk) { throw "Java runtime not found in extracted JBR archive" }
+          "JAVA_HOME=$($jdk.FullName)" >> $env:GITHUB_ENV
+          "$($jdk.FullName)\bin" >> $env:GITHUB_PATH
 
-      - name: Install 7z
-        uses: milliewalky/setup-7-zip@v2
-
-      - name: Installing Java
-        run: |
-          $zipPath = "${{ runner.temp }}\java_package.zip"
-          $extractDir = "${{ runner.temp }}\jbr"
-          $url = "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-${{ env.JBR_MAJOR }}-windows-${{ env.ARCH }}-${{ env.JBR_PATCH }}.zip"
-          curl -s --output $zipPath -L $url
-          unzip -q $zipPath -d $extractDir
-          $jbrDir = Get-ChildItem $extractDir | Select-Object -First 1
-          echo "JAVA_HOME=$($jbrDir.FullName)" >> $env:GITHUB_ENV
-
-      - uses: actions/cache@v4
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: ${{ runner.os }}-${{ runner.arch }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          key: windows-x64-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-gradle-
+            windows-x64-gradle-
 
-      - name: Compile
-        run: .\gradlew :check-license && .\gradlew classes -x test
-
-      - name: JLink
-        run: .\gradlew :jar :copy-dependencies :plugins:migration:build :jlink
-
-      - name: Package
-        run: .\gradlew :jpackage && .\gradlew :dist
-
-      - name: MSIX
-        env:
-          TERMORA_TYPE: appx
+      - name: Build Tunnelkeeper portable ZIP
+        shell: pwsh
         run: |
-          .\gradlew --stop
-          .\gradlew :dist
+          .\gradlew.bat :check-license :portableDist --stacktrace
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Stop Gradle
-        run: .\gradlew.bat --stop
+      - name: Check portable package and write SHA-256
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $packages = @(Get-ChildItem -Path 'build/distributions' -Filter '*-windows-*-portable.zip' -File)
+          if ($packages.Count -ne 1) { throw "Expected one portable ZIP, found $($packages.Count)" }
+          $package = $packages[0]
+          $entries = (& tar -tf $package.FullName) -replace '\\', '/'
+          if ($LASTEXITCODE -ne 0) { throw "Failed to read portable ZIP" }
+          if (-not ($entries | Where-Object { $_ -eq 'Tunnelkeeper/Tunnelkeeper.exe' })) {
+            throw "Portable ZIP is missing Tunnelkeeper.exe"
+          }
+          if (-not ($entries | Where-Object { $_ -match '^Tunnelkeeper/runtime/' })) {
+            throw "Portable ZIP is missing its bundled Java runtime"
+          }
+          if (-not ($entries | Where-Object { $_ -match '^Tunnelkeeper/data/?$' })) {
+            throw "Portable ZIP is missing its writable data folder"
+          }
+          $hash = (Get-FileHash -LiteralPath $package.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $($package.Name)" | Set-Content -LiteralPath "$($package.FullName).sha256" -Encoding ascii
+          Write-Host "Verified portable build: $($package.Name)"
 
-      - name: Upload zip artifact
+      - name: Upload portable ZIP and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: termora-windows-zip-${{ runner.arch }}
+          name: Tunnelkeeper-Windows-x64-portable
           path: |
-            build/distributions/*.zip
-
-      - name: Upload exe artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: termora-windows-exe-${{ runner.arch }}
-          path: |
-            build/distributions/*.exe
-
-      - name: Upload msix artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: termora-windows-msix-${{ runner.arch }}
-          path: |
-            build/distributions/*.msix
+            build/distributions/*-windows-*-portable.zip
+            build/distributions/*-windows-*-portable.zip.sha256
+          if-no-files-found: error
+          retention-days: 30
