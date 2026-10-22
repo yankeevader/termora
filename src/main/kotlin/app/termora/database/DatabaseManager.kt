@@ -719,7 +719,7 @@ class DatabaseManager private constructor() : Disposable {
         /**
          * 布局
          */
-        var layout by StringPropertyDelegate(TermoraLayout.Screen.name)
+        var layout by StringPropertyDelegate(TermoraLayout.Fence.name)
 
         /**
          * 标签序号
